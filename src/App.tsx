@@ -2,16 +2,20 @@ import { useEffect, useReducer } from "react"
 import {
   type Action,
   type Operator,
-  displayLabel,
   initialState,
   isOperator,
   reducer,
 } from "./calculator"
+import { useT } from "./i18n/context"
+import { displayLabel, formatDisplay } from "./i18n/format"
+import type { Messages } from "./i18n/messages"
+import { LanguageAnnouncer, LanguageSwitcher } from "./i18n/LanguageSwitcher"
 import "./App.css"
 
 interface KeyDef {
   label: string
-  ariaLabel: string
+  /** Picks the appropriate aria-label out of the active translation bundle. */
+  getAriaLabel: (t: Messages) => string
   variant?: "fn" | "op" | "eq" | "zero"
   action: Action
   /** When set, marks this key as a toggle whose pressed state reflects the pending operator. */
@@ -21,58 +25,94 @@ interface KeyDef {
 const KEYS: readonly KeyDef[] = [
   {
     label: "C",
-    ariaLabel: "Vymazat vše",
+    getAriaLabel: (t) => t.keys.clear,
     variant: "fn",
     action: { type: "clear" },
   },
   {
     label: "+/−",
-    ariaLabel: "Změnit znaménko",
+    getAriaLabel: (t) => t.keys.toggleSign,
     variant: "fn",
     action: { type: "toggleSign" },
   },
   {
     label: "⌫",
-    ariaLabel: "Smazat poslední znak",
+    getAriaLabel: (t) => t.keys.backspace,
     variant: "fn",
     action: { type: "backspace" },
   },
   {
     label: "÷",
-    ariaLabel: "Dělit",
+    getAriaLabel: (t) => t.keys.divide,
     variant: "op",
     action: { type: "operator", op: "/" },
     op: "/",
   },
 
-  { label: "7", ariaLabel: "Sedm", action: { type: "digit", digit: "7" } },
-  { label: "8", ariaLabel: "Osm", action: { type: "digit", digit: "8" } },
-  { label: "9", ariaLabel: "Devět", action: { type: "digit", digit: "9" } },
+  {
+    label: "7",
+    getAriaLabel: (t) => t.keys.digits["7"],
+    action: { type: "digit", digit: "7" },
+  },
+  {
+    label: "8",
+    getAriaLabel: (t) => t.keys.digits["8"],
+    action: { type: "digit", digit: "8" },
+  },
+  {
+    label: "9",
+    getAriaLabel: (t) => t.keys.digits["9"],
+    action: { type: "digit", digit: "9" },
+  },
   {
     label: "×",
-    ariaLabel: "Násobit",
+    getAriaLabel: (t) => t.keys.multiply,
     variant: "op",
     action: { type: "operator", op: "*" },
     op: "*",
   },
 
-  { label: "4", ariaLabel: "Čtyři", action: { type: "digit", digit: "4" } },
-  { label: "5", ariaLabel: "Pět", action: { type: "digit", digit: "5" } },
-  { label: "6", ariaLabel: "Šest", action: { type: "digit", digit: "6" } },
+  {
+    label: "4",
+    getAriaLabel: (t) => t.keys.digits["4"],
+    action: { type: "digit", digit: "4" },
+  },
+  {
+    label: "5",
+    getAriaLabel: (t) => t.keys.digits["5"],
+    action: { type: "digit", digit: "5" },
+  },
+  {
+    label: "6",
+    getAriaLabel: (t) => t.keys.digits["6"],
+    action: { type: "digit", digit: "6" },
+  },
   {
     label: "−",
-    ariaLabel: "Odečíst",
+    getAriaLabel: (t) => t.keys.subtract,
     variant: "op",
     action: { type: "operator", op: "-" },
     op: "-",
   },
 
-  { label: "1", ariaLabel: "Jedna", action: { type: "digit", digit: "1" } },
-  { label: "2", ariaLabel: "Dva", action: { type: "digit", digit: "2" } },
-  { label: "3", ariaLabel: "Tři", action: { type: "digit", digit: "3" } },
+  {
+    label: "1",
+    getAriaLabel: (t) => t.keys.digits["1"],
+    action: { type: "digit", digit: "1" },
+  },
+  {
+    label: "2",
+    getAriaLabel: (t) => t.keys.digits["2"],
+    action: { type: "digit", digit: "2" },
+  },
+  {
+    label: "3",
+    getAriaLabel: (t) => t.keys.digits["3"],
+    action: { type: "digit", digit: "3" },
+  },
   {
     label: "+",
-    ariaLabel: "Přičíst",
+    getAriaLabel: (t) => t.keys.add,
     variant: "op",
     action: { type: "operator", op: "+" },
     op: "+",
@@ -80,14 +120,18 @@ const KEYS: readonly KeyDef[] = [
 
   {
     label: "0",
-    ariaLabel: "Nula",
+    getAriaLabel: (t) => t.keys.digits["0"],
     variant: "zero",
     action: { type: "digit", digit: "0" },
   },
-  { label: ",", ariaLabel: "Desetinná čárka", action: { type: "dot" } },
+  {
+    label: ",",
+    getAriaLabel: (t) => t.keys.dot,
+    action: { type: "dot" },
+  },
   {
     label: "=",
-    ariaLabel: "Rovná se",
+    getAriaLabel: (t) => t.keys.equals,
     variant: "eq",
     action: { type: "equals" },
   },
@@ -111,6 +155,7 @@ const PREVENT_DEFAULT_KEYS = new Set(["+", "-", "*", "/", "=", "Enter"])
 
 /** Root component holding the calculator state and rendered keypad. */
 function App() {
+  const { t, locale } = useT()
   const [state, dispatch] = useReducer(reducer, initialState)
 
   /** Binds global keyboard shortcuts once — dispatch is stable so deps stay empty. */
@@ -125,26 +170,30 @@ function App() {
     return () => window.removeEventListener("keydown", handle)
   }, [])
 
-  const displayText = state.display.replace(".", ",")
+  const displayText = state.error
+    ? t.error
+    : formatDisplay(state.display, locale)
 
   return (
     <main className="calculator-wrapper">
-      <h1 className="visually-hidden">Kalkulačka</h1>
+      <LanguageSwitcher />
+      <LanguageAnnouncer />
+      <h1 className="visually-hidden">{t.appName}</h1>
       <section className="calculator" aria-labelledby="calc-title">
         <h2 id="calc-title" className="visually-hidden">
-          Kalkulačka
+          {t.appName}
         </h2>
 
         <output
           className="display"
           aria-live="polite"
           aria-atomic="true"
-          aria-label={`Výsledek: ${displayLabel(state)}`}
+          aria-label={`${t.result}: ${displayLabel(state, t, locale)}`}
         >
-          <span aria-hidden="true">{state.error ? "Chyba" : displayText}</span>
+          <span aria-hidden="true">{displayText}</span>
         </output>
 
-        <div className="keys" role="group" aria-label="Klávesnice kalkulačky">
+        <div className="keys" role="group" aria-label={t.keypad}>
           {KEYS.map((key) => {
             const isActive =
               key.op !== undefined &&
@@ -163,7 +212,7 @@ function App() {
                 type="button"
                 className={className}
                 onClick={() => dispatch(key.action)}
-                aria-label={key.ariaLabel}
+                aria-label={key.getAriaLabel(t)}
                 aria-pressed={key.op !== undefined ? isActive : undefined}
               >
                 <span aria-hidden="true">{key.label}</span>
@@ -173,7 +222,7 @@ function App() {
         </div>
 
         <p className="hint" aria-hidden="true">
-          Klávesnice: 0–9, + − * /, Enter, Backspace, Esc
+          {t.hint}
         </p>
       </section>
     </main>

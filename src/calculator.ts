@@ -48,13 +48,6 @@ export type Action =
   | { type: "operator"; op: Operator }
   | { type: "equals" }
 
-/** Builds a localized, screen-reader-friendly version of the display value (Czech, with spoken minus sign). */
-export const displayLabel = (state: State): string => {
-  if (state.error) return "Chyba"
-  const formatted = state.display.replace(".", ",")
-  return formatted.startsWith("-") ? `mínus ${formatted.slice(1)}` : formatted
-}
-
 /** Maximum operand length (excluding sign) — keeps the displayed value within IEEE-754 precision. */
 export const MAX_INPUT_LENGTH = 16
 

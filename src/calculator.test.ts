@@ -4,7 +4,6 @@ import {
   type Operator,
   type State,
   MAX_INPUT_LENGTH,
-  displayLabel,
   initialState,
   reducer,
 } from "./calculator"
@@ -241,20 +240,5 @@ describe("repeat equals", () => {
 
   it("is a no-op when no prior operation exists", () => {
     expect(run([eq]).display).toBe("0")
-  })
-})
-
-describe("displayLabel", () => {
-  it("returns 'Chyba' in error state", () => {
-    const state = run([digit("5"), op("/"), digit("0"), eq])
-    expect(displayLabel(state)).toBe("Chyba")
-  })
-
-  it("speaks negative values as 'mínus N'", () => {
-    expect(displayLabel({ ...initialState, display: "-5" })).toBe("mínus 5")
-  })
-
-  it("uses a comma as the decimal separator", () => {
-    expect(displayLabel({ ...initialState, display: "1.5" })).toBe("1,5")
   })
 })
